@@ -1,126 +1,83 @@
-# CP Multi-Language Sandbox Tester
+# CP Multi-Language Sandbox Tester (AI Powered)
 
-A competitive programming stress-testing prototype built with Streamlit, FastAPI, LangGraph, and Google Gemini-style generation. It generates brute-force Python reference code and randomized test inputs, then runs user solutions in a sandboxed execution flow.
+A competitive-programming (CP) stress-testing toolkit that helps you find corner cases by running a trusted reference implementation (brute-force or correct solution) against one or more candidate solutions across many generated test cases. This project includes optional AI-assisted test-generation and a sandboxed execution environment for multi-language support.
 
-## What it does
+Why this exists
+- Finding hard-to-reach bugs in CP solutions is time-consuming. This tool automates test-case generation, verification, and differential testing to surface Wrong Answers, Runtime Errors, Timeouts, and other failures.
+- AI-assisted generators can explore non-obvious edge cases faster than naive randomized testers.
 
-- Accepts a problem statement, user solution, and target language from the UI
-- Generates a brute-force Python reference implementation and a randomized test-case generator
-- Verifies generator and brute-force validity before stress testing
-- Runs the user's code in a sandboxed MCP tool environment
-- Detects and reports:
-  - `AC` (all tests passed)
-  - `WA` (wrong answer)
-  - `RE` (runtime error)
-  - `TLE` (timeout)
-  - `CE` (compilation error)
+Key features
+- Generate brute-force (reference) solutions and test-case generators (including LLM-assisted generators).
+- Verify generated helpers before running stress tests to avoid false positives.
+- Sandboxed execution for multiple languages (Python and other runtimes supported in the Docker environment).
+- Record and persist failing test cases for later debugging and reuse.
+- Streamlit frontend and FastAPI backend for interactive workflows.
 
-## Key files
+Repository layout (important files)
+- app.py — Streamlit web UI for entering problem statements, code, and running tests
+- server.py — FastAPI backend exposing stress endpoints
+- graph.py — LangGraph workflow orchestration for generation, verification, and testing
+- nodes/ — Workflow node implementations (prepare_generation, verify_generation, stress_test, router)
+- memory/chroma_memory.py — Optional Chroma persistence for known failures/successes
+- docker/Dockerfile — Base image for sandboxed execution (includes common toolchains)
+- requirements.txt — Python dependencies
 
-- `app.py` — Streamlit frontend for entering problem statements, code, and running tests
-- `server.py` — FastAPI backend exposing `/stress` and orchestrating the workflow
-- `graph.py` — LangGraph workflow definition for generation, verification, and stress testing
-- `nodes/prepare_generation.py` — LLM prompt and brute-force/generator generation step
-- `nodes/verify_generation.py` — Syntax and execution validation of generated code
-- `nodes/stress_test.py` — Executes generated code and user code through the MCP tool
-- `nodes/router.py` — Workflow routing logic for retrying or continuing
-- `memory/chroma_memory.py` — Persistent Chroma memory store for previous failures/successes
-- `docker/Dockerfile` — Base sandbox image with Python, C/C++, and Java toolchains
-- `requirements.txt` — Core Python dependencies
+Quickstart (local)
+1. Clone the repo
 
-## Architecture
+   git clone https://github.com/bhargvv/AI_Powered_CP_Stress_Tester.git
+   cd AI_Powered_CP_Stress_Tester
 
-1. User enters a problem statement, code, language, and test count in Streamlit (`app.py`).
-2. The frontend sends the request to FastAPI (`server.py`).
-3. `graph.py` runs a LangGraph workflow with three main stages:
-   - `prepare_generation`
-   - `verify_generation`
-   - `stress_test`
-4. Generated brute-force and test-case code are verified before stress testing.
-5. The MCP-backed sandbox environment compiles/runs code and returns results.
-6. Memory data is saved to `memory/chroma_db` for future similarity-based context.
+2. Create and activate a virtual environment
 
-## Requirements
+   python -m venv .venv
+   source .venv/bin/activate   # macOS / Linux
+   .venv\Scripts\activate    # Windows
 
-- Python 3.11+ (project uses Python 3.12 in the virtual environment)
-- Docker Engine (for sandbox execution if you use Docker tooling)
-- `GEMINI_API_KEY` set in the environment or `.env`
-- Required Python packages including:
-  - `streamlit`
-  - `requests`
-  - `mcp`
-  - `fastapi`
-  - `uvicorn`
-  - `python-dotenv`
-  - `pydantic`
-  - `langgraph`
-  - `langchain_google_genai`
-  - `chromadb`
+3. Install dependencies
 
-## Setup
+   pip install -r requirements.txt
 
-1. Activate your virtual environment:
+4. Configure environment variables (if using LLM/AI generation)
 
-```bash
-source .venv/bin/activate
-```
+   - Set GEMINI_API_KEY or other provider keys as required (see code/config for supported providers).
+   - Create a `.env` file or export the keys into your shell.
 
-2. Install dependencies:
+5. Run the backend and frontend
 
-```bash
-pip install -r requirements.txt
-pip install fastapi uvicorn python-dotenv pydantic langgraph langchain_google_genai chromadb
-```
+   uvicorn server:app --reload --port 8000
+   streamlit run app.py
 
-3. Configure your Gemini API key in `.env` or environment variables:
+Usage overview
+- From the Streamlit UI, provide:
+  - Problem statement/description
+  - A reference (brute-force) implementation or choose to auto-generate one
+  - One or more candidate solutions to test
+  - Target language (e.g., python, cpp, java) and iteration count
+- Start the stress test. The backend will:
+  1. Generate (or accept) a brute-force reference and a test-case generator
+  2. Validate that generated code runs and produces expected output on sanity checks
+  3. Run many randomized/AI-generated test cases, comparing outputs and reporting mismatches
+- Failures (WA/RE/TLE) are reported with the input that triggered them and any available logs.
 
-```bash
-export GEMINI_API_KEY="YOUR_API_KEY"
-```
+Docker (optional)
+- Build the sandbox image (used as a reference environment for compilation/execution):
 
-4. Start the backend server:
+   docker build -t ai-agent-runner -f docker/Dockerfile .
 
-```bash
-uvicorn server:app --reload --port 8000
-```
+- Run commands inside the container or mount your repo to run tests in an isolated environment.
 
-5. Start the frontend UI:
+Configuration & notes
+- Timeouts: Configure per-test timeouts to avoid long-running or hung processes.
+- Generators: Use the deterministic or LLM-based generator depending on the breadth of coverage desired. LLM generators may require API keys and might incur costs.
+- Persisting failures: The project optionally saves failing cases in Chroma memory for later inspection and similarity-based reuse.
+- Security: The tool executes untrusted code in a sandboxed environment. Review the Docker sandbox implementation before use in untrusted environments.
 
-```bash
-streamlit run app.py
-```
+Contributing
+- Bug reports, feature requests, and pull requests are welcome. Please include tests for new functionality where applicable and keep PRs focused.
 
-## Running with Docker
+License
+- Add or update a LICENSE file to declare the project license (e.g., MIT).
 
-The repository includes a Dockerfile at `docker/Dockerfile` for a sandbox base image.
-
-Build it with:
-
-```bash
-docker build -t ai-agent-runner -f docker/Dockerfile .
-```
-
-Use the image as a reference environment for language runtimes and compilation.
-
-## Usage
-
-- Open the Streamlit app in your browser
-- Enter a problem statement and paste your code
-- Select the target language (`cpp`, `python`, or `java`)
-- Choose the number of randomized test cases
-- Click **Start Stress Test**
-
-The app will display one of the following outcomes:
-
-- `Accepted` if the solution passes all tests
-- `Wrong Answer` with failing input and expected output
-- `Runtime Error` with error logs
-- `Time Limit Exceeded` with failing input
-- `Generation verification failed` if the generated helper code needs regeneration
-
-## Notes
-
-- Generated brute-force and generator code are validated before stress testing.
-- Failure and success cases are stored in Chroma memory for later context.
-- The backend uses MCP tooling to isolate code compilation and execution.
-- If the frontend cannot connect, ensure `uvicorn server:app --reload --port 8000` is running.
+Contact
+- For questions or issues, please open an issue in the repo.
